@@ -34,8 +34,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 {
   "mcpServers": {
     "dueey": {
-      "command": "node",
-      "args": ["/path/to/dueey-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "dueey-mcp@latest"],
       "env": {
         "DUEEY_API_KEY": "pm_your_token_here"
       }
@@ -54,8 +54,8 @@ Add the server in **Cursor Settings → Features → MCP** (or your project’s 
 {
   "mcpServers": {
     "dueey": {
-      "command": "node",
-      "args": ["/path/to/dueey-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "dueey-mcp@latest"],
       "env": {
         "DUEEY_API_KEY": "pm_your_token_here"
       }
@@ -63,8 +63,6 @@ Add the server in **Cursor Settings → Features → MCP** (or your project’s 
   }
 }
 ```
-
-If you installed globally (`npm install -g dueey-mcp`), use the path from `npm root -g` (e.g. `"args": ["/usr/local/lib/node_modules/dueey-mcp/dist/index.js"]`) or use `npx`: `"command": "npx", "args": ["dueey-mcp"]` and keep `env` as above.
 
 #### Other clients
 
