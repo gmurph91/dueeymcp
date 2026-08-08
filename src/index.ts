@@ -89,6 +89,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
+    {
+      name: "create_board",
+      description:
+        "Create a brand-new board (project) in a workspace. Creates default lists (To Do / Doing / Done) unless `lists` is passed (pass `lists: []` for no lists).",
+      inputSchema: {
+        type: "object",
+        required: ["workspaceId", "title"],
+        properties: {
+          workspaceId: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          goal: { type: "string", description: "What this board/project is trying to achieve — used as AI context." },
+          cardKeyPrefix: { type: "string", description: "2-12 uppercase alphanumeric chars, e.g. SWAT. Derived from title if omitted." },
+          lists: {
+            type: "array",
+            items: { type: "string" },
+            description: "List titles to create, in order. Defaults to ['To Do', 'Doing', 'Done'].",
+          },
+        },
+      },
+    },
+    {
+      name: "update_board",
+      description:
+        "Update a board's title, description, goal, or projectDescription. Structural fields (visibility, cardKeyPrefix, workspaceId) are intentionally not editable via this API.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", description: "Board ID" },
+          title: { type: "string" },
+          description: { type: "string" },
+          goal: { type: "string", description: "What this board/project is trying to achieve — used as AI context." },
+          projectDescription: { type: "string" },
+        },
+      },
+    },
 
     // Lists
     {
@@ -100,6 +137,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           boardId: { type: "string", description: "Board ID" },
           fields: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "create_list",
+      description: "Create a new list (column) on a board.",
+      inputSchema: {
+        type: "object",
+        required: ["boardId", "title"],
+        properties: {
+          boardId: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          position: { type: "number", description: "Defaults to the end of the board." },
+        },
+      },
+    },
+    {
+      name: "update_list",
+      description: "Rename, reorder, or archive/restore a list. Pass only the fields you want to change.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", description: "List ID" },
+          title: { type: "string" },
+          description: { type: "string" },
+          position: { type: "number" },
+          deletedAt: {
+            type: "string",
+            nullable: true,
+            description: "Set an ISO timestamp to archive the list, or null to restore it.",
+          },
         },
       },
     },
@@ -115,7 +185,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           boardId: { type: "string" },
           listId: { type: "string" },
           limit: { type: "number", description: "Max results (default 50)" },
+          unassigned: { type: "boolean", description: "Only return cards with no assignee." },
           fields: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "claim_next_card",
+      description:
+        "Atomically claim the next unassigned card for an agent, ordered by board position, list position, then AI rank — so parallel agents don't grab the same card. Sets members/assignee to agentId.",
+      inputSchema: {
+        type: "object",
+        required: ["agentId"],
+        properties: {
+          agentId: { type: "string", description: "Identifier for the claiming agent (1-120 printable ASCII chars)." },
+          boardId: { type: "string", description: "Restrict claim to this board." },
+          listId: { type: "string", description: "Restrict claim to this list (overrides boardId scope to that list's board)." },
         },
       },
     },
@@ -158,6 +243,47 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               },
             },
           },
+          members: { type: "array", items: { type: "string" }, description: "Assignee(s) — user id/email or agent id." },
+        },
+      },
+    },
+    {
+      name: "link_card",
+      description: "Link a card to another card as blocking or blocked-by it (a dependency relationship).",
+      inputSchema: {
+        type: "object",
+        required: ["id", "cardId", "type"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          cardId: { type: "string", description: "The other card's UUID or cardKey" },
+          type: { type: "string", enum: ["blocks", "blocked_by"] },
+          reason: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "unlink_card",
+      description: "Remove a blocks/blocked_by link between two cards.",
+      inputSchema: {
+        type: "object",
+        required: ["id", "cardId", "type"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          cardId: { type: "string", description: "The other card's UUID or cardKey to unlink" },
+          type: { type: "string", enum: ["blocks", "blocked_by"] },
+        },
+      },
+    },
+    {
+      name: "add_comment",
+      description: "Add a simple text comment to a card.",
+      inputSchema: {
+        type: "object",
+        required: ["id", "text"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          text: { type: "string" },
+          authorName: { type: "string", description: "Defaults to the authenticated user; override for agent-attributed comments, e.g. 'Claude Code agent'." },
         },
       },
     },
@@ -181,6 +307,68 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           startDate: { type: "string", nullable: true },
           checklist: { type: "array" },
           listId: { type: "string", description: "Move card to this list" },
+          members: { type: "array", items: { type: "string" }, description: "Assignee(s) — user id/email or agent id. Pass [] to unassign." },
+          assignee: { type: "string", nullable: true, description: "Shorthand for a single assignee; ignored if members is also passed." },
+          acceptanceCriteria: {
+            type: "array",
+            items: { type: "string" },
+            description: "What 'done' means for this card, as a list of concrete statements.",
+          },
+          technicalNotes: {
+            type: "string",
+            description: "Implementation notes: files/patterns to reuse, approach, gotchas.",
+          },
+          effortEstimate: {
+            type: "string",
+            enum: ["XS", "S", "M", "L", "XL"],
+            nullable: true,
+          },
+          fileHints: {
+            type: "array",
+            items: { type: "string" },
+            description: "Repo paths relevant to this card, e.g. src/components/ui/chart.tsx.",
+          },
+          position: {
+            oneOf: [{ type: "number" }, { type: "string", enum: ["top", "bottom"] }],
+            description: "Sort position within its list — 'top'/'bottom' to move to an end (recommended), or a raw number (advanced; no auto-reindex of siblings).",
+          },
+          color: { type: "string", nullable: true },
+          cover: { type: "string", nullable: true },
+          coverTitle: { type: "string", nullable: true },
+          coverDescription: { type: "string", nullable: true },
+          deletedAt: {
+            type: "string",
+            nullable: true,
+            description: "Set an ISO timestamp to archive the card, or null to restore it.",
+          },
+          agentStatus: {
+            type: "string",
+            nullable: true,
+            enum: ["idle", "queued", "dispatched", "in_progress", "pr_ready", "done", "failed"],
+            description: "Self-report an agent's progress on this card.",
+          },
+          agentTarget: {
+            type: "string",
+            nullable: true,
+            enum: ["claude-code", "codex", "cursor", "api"],
+          },
+          agentBranch: { type: "string", nullable: true },
+          agentPrUrl: { type: "string", nullable: true },
+        },
+      },
+    },
+
+    // Context
+    {
+      name: "get_card_context",
+      description:
+        "Get a card plus its board (title/goal) and sibling cards on the same board in one call — grounding context for fleshing out or triaging a card without multiple round trips.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          siblingLimit: { type: "number", description: "Max sibling cards to include (default 50)" },
         },
       },
     },
@@ -227,12 +415,52 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         })
       );
 
+    case "create_board": {
+      const { ...body } = args;
+      return ok(
+        await dueeyFetch("/boards", {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "update_board": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/boards/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
     case "list_lists":
       return ok(
         await dueeyFetch("/lists", {
           params: { boardId: args.boardId as string, fields: args.fields as string },
         })
       );
+
+    case "create_list": {
+      const { ...body } = args;
+      return ok(
+        await dueeyFetch("/lists", {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "update_list": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/lists/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        })
+      );
+    }
 
     case "list_cards":
       return ok(
@@ -241,10 +469,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             boardId: args.boardId as string,
             listId: args.listId as string,
             limit: args.limit as number,
+            unassigned: args.unassigned ? "1" : undefined,
             fields: args.fields as string,
           },
         })
       );
+
+    case "claim_next_card": {
+      const { ...body } = args;
+      return ok(
+        await dueeyFetch("/cards/claim-next", {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
 
     case "get_card":
       return ok(
@@ -271,6 +510,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           body: JSON.stringify(body),
         })
       );
+    }
+
+    case "link_card": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/cards/${id}/links`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "unlink_card": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/cards/${id}/links`, {
+          method: "DELETE",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "add_comment": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/cards/${id}/comments`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "get_card_context": {
+      const card = (await dueeyFetch(`/cards/${args.id}`, {})) as Record<string, unknown>;
+      const boardId = card.boardId as string | undefined;
+      if (!boardId) {
+        return ok({ card, board: null, siblingCards: [] });
+      }
+      const [board, siblingCards] = await Promise.all([
+        dueeyFetch(`/boards/${boardId}`, {}),
+        dueeyFetch("/cards", {
+          params: { boardId, limit: (args.siblingLimit as number) ?? 50 },
+        }),
+      ]);
+      return ok({ card, board, siblingCards });
     }
 
     case "get_data":
