@@ -248,6 +248,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "link_card",
+      description: "Link a card to another card as blocking or blocked-by it (a dependency relationship).",
+      inputSchema: {
+        type: "object",
+        required: ["id", "cardId", "type"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          cardId: { type: "string", description: "The other card's UUID or cardKey" },
+          type: { type: "string", enum: ["blocks", "blocked_by"] },
+          reason: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "unlink_card",
+      description: "Remove a blocks/blocked_by link between two cards.",
+      inputSchema: {
+        type: "object",
+        required: ["id", "cardId", "type"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          cardId: { type: "string", description: "The other card's UUID or cardKey to unlink" },
+          type: { type: "string", enum: ["blocks", "blocked_by"] },
+        },
+      },
+    },
+    {
       name: "add_comment",
       description: "Add a simple text comment to a card.",
       inputSchema: {
@@ -480,6 +507,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return ok(
         await dueeyFetch(`/cards/${id}`, {
           method: "PATCH",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "link_card": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/cards/${id}/links`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "unlink_card": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/cards/${id}/links`, {
+          method: "DELETE",
           body: JSON.stringify(body),
         })
       );
