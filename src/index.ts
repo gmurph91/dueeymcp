@@ -89,6 +89,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
+    {
+      name: "update_board",
+      description:
+        "Update a board's title, description, goal, or projectDescription. Structural fields (visibility, cardKeyPrefix, workspaceId) are intentionally not editable via this API.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", description: "Board ID" },
+          title: { type: "string" },
+          description: { type: "string" },
+          goal: { type: "string", description: "What this board/project is trying to achieve — used as AI context." },
+          projectDescription: { type: "string" },
+        },
+      },
+    },
 
     // Lists
     {
@@ -100,6 +116,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           boardId: { type: "string", description: "Board ID" },
           fields: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "create_list",
+      description: "Create a new list (column) on a board.",
+      inputSchema: {
+        type: "object",
+        required: ["boardId", "title"],
+        properties: {
+          boardId: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          position: { type: "number", description: "Defaults to the end of the board." },
+        },
+      },
+    },
+    {
+      name: "update_list",
+      description: "Rename, reorder, or archive/restore a list. Pass only the fields you want to change.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", description: "List ID" },
+          title: { type: "string" },
+          description: { type: "string" },
+          position: { type: "number" },
+          deletedAt: {
+            type: "string",
+            nullable: true,
+            description: "Set an ISO timestamp to archive the list, or null to restore it.",
+          },
         },
       },
     },
@@ -115,7 +164,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           boardId: { type: "string" },
           listId: { type: "string" },
           limit: { type: "number", description: "Max results (default 50)" },
+          unassigned: { type: "boolean", description: "Only return cards with no assignee." },
           fields: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "claim_next_card",
+      description:
+        "Atomically claim the next unassigned card for an agent, ordered by board position, list position, then AI rank — so parallel agents don't grab the same card. Sets members/assignee to agentId.",
+      inputSchema: {
+        type: "object",
+        required: ["agentId"],
+        properties: {
+          agentId: { type: "string", description: "Identifier for the claiming agent (1-120 printable ASCII chars)." },
+          boardId: { type: "string", description: "Restrict claim to this board." },
+          listId: { type: "string", description: "Restrict claim to this list (overrides boardId scope to that list's board)." },
         },
       },
     },
@@ -284,12 +348,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         })
       );
 
+    case "update_board": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/boards/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
     case "list_lists":
       return ok(
         await dueeyFetch("/lists", {
           params: { boardId: args.boardId as string, fields: args.fields as string },
         })
       );
+
+    case "create_list": {
+      const { ...body } = args;
+      return ok(
+        await dueeyFetch("/lists", {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "update_list": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/lists/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        })
+      );
+    }
 
     case "list_cards":
       return ok(
@@ -298,10 +392,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             boardId: args.boardId as string,
             listId: args.listId as string,
             limit: args.limit as number,
+            unassigned: args.unassigned ? "1" : undefined,
             fields: args.fields as string,
           },
         })
       );
+
+    case "claim_next_card": {
+      const { ...body } = args;
+      return ok(
+        await dueeyFetch("/cards/claim-next", {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
 
     case "get_card":
       return ok(
