@@ -181,6 +181,63 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           startDate: { type: "string", nullable: true },
           checklist: { type: "array" },
           listId: { type: "string", description: "Move card to this list" },
+          acceptanceCriteria: {
+            type: "array",
+            items: { type: "string" },
+            description: "What 'done' means for this card, as a list of concrete statements.",
+          },
+          technicalNotes: {
+            type: "string",
+            description: "Implementation notes: files/patterns to reuse, approach, gotchas.",
+          },
+          effortEstimate: {
+            type: "string",
+            enum: ["XS", "S", "M", "L", "XL"],
+            nullable: true,
+          },
+          fileHints: {
+            type: "array",
+            items: { type: "string" },
+            description: "Repo paths relevant to this card, e.g. src/components/ui/chart.tsx.",
+          },
+          position: { type: "number", description: "Sort position within its list (advanced; no auto-reindex of siblings)." },
+          color: { type: "string", nullable: true },
+          cover: { type: "string", nullable: true },
+          coverTitle: { type: "string", nullable: true },
+          coverDescription: { type: "string", nullable: true },
+          deletedAt: {
+            type: "string",
+            nullable: true,
+            description: "Set an ISO timestamp to archive the card, or null to restore it.",
+          },
+          agentStatus: {
+            type: "string",
+            nullable: true,
+            enum: ["idle", "queued", "dispatched", "in_progress", "pr_ready", "done", "failed"],
+            description: "Self-report an agent's progress on this card.",
+          },
+          agentTarget: {
+            type: "string",
+            nullable: true,
+            enum: ["claude-code", "codex", "cursor", "api"],
+          },
+          agentBranch: { type: "string", nullable: true },
+          agentPrUrl: { type: "string", nullable: true },
+        },
+      },
+    },
+
+    // Context
+    {
+      name: "get_card_context",
+      description:
+        "Get a card plus its board (title/goal) and sibling cards on the same board in one call — grounding context for fleshing out or triaging a card without multiple round trips.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          siblingLimit: { type: "number", description: "Max sibling cards to include (default 50)" },
         },
       },
     },
@@ -271,6 +328,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           body: JSON.stringify(body),
         })
       );
+    }
+
+    case "get_card_context": {
+      const card = (await dueeyFetch(`/cards/${args.id}`, {})) as Record<string, unknown>;
+      const boardId = card.boardId as string | undefined;
+      if (!boardId) {
+        return ok({ card, board: null, siblingCards: [] });
+      }
+      const [board, siblingCards] = await Promise.all([
+        dueeyFetch(`/boards/${boardId}`, {}),
+        dueeyFetch("/cards", {
+          params: { boardId, limit: (args.siblingLimit as number) ?? 50 },
+        }),
+      ]);
+      return ok({ card, board, siblingCards });
     }
 
     case "get_data":
