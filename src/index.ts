@@ -90,6 +90,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "create_board",
+      description:
+        "Create a brand-new board (project) in a workspace. Creates default lists (To Do / Doing / Done) unless `lists` is passed (pass `lists: []` for no lists).",
+      inputSchema: {
+        type: "object",
+        required: ["workspaceId", "title"],
+        properties: {
+          workspaceId: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
+          goal: { type: "string", description: "What this board/project is trying to achieve — used as AI context." },
+          cardKeyPrefix: { type: "string", description: "2-12 uppercase alphanumeric chars, e.g. SWAT. Derived from title if omitted." },
+          lists: {
+            type: "array",
+            items: { type: "string" },
+            description: "List titles to create, in order. Defaults to ['To Do', 'Doing', 'Done'].",
+          },
+        },
+      },
+    },
+    {
       name: "update_board",
       description:
         "Update a board's title, description, goal, or projectDescription. Structural fields (visibility, cardKeyPrefix, workspaceId) are intentionally not editable via this API.",
@@ -222,6 +243,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               },
             },
           },
+          members: { type: "array", items: { type: "string" }, description: "Assignee(s) — user id/email or agent id." },
+        },
+      },
+    },
+    {
+      name: "add_comment",
+      description: "Add a simple text comment to a card.",
+      inputSchema: {
+        type: "object",
+        required: ["id", "text"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          text: { type: "string" },
+          authorName: { type: "string", description: "Defaults to the authenticated user; override for agent-attributed comments, e.g. 'Claude Code agent'." },
         },
       },
     },
@@ -245,6 +280,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           startDate: { type: "string", nullable: true },
           checklist: { type: "array" },
           listId: { type: "string", description: "Move card to this list" },
+          members: { type: "array", items: { type: "string" }, description: "Assignee(s) — user id/email or agent id. Pass [] to unassign." },
+          assignee: { type: "string", nullable: true, description: "Shorthand for a single assignee; ignored if members is also passed." },
           acceptanceCriteria: {
             type: "array",
             items: { type: "string" },
@@ -264,7 +301,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             items: { type: "string" },
             description: "Repo paths relevant to this card, e.g. src/components/ui/chart.tsx.",
           },
-          position: { type: "number", description: "Sort position within its list (advanced; no auto-reindex of siblings)." },
+          position: {
+            oneOf: [{ type: "number" }, { type: "string", enum: ["top", "bottom"] }],
+            description: "Sort position within its list — 'top'/'bottom' to move to an end (recommended), or a raw number (advanced; no auto-reindex of siblings).",
+          },
           color: { type: "string", nullable: true },
           cover: { type: "string", nullable: true },
           coverTitle: { type: "string", nullable: true },
@@ -348,6 +388,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         })
       );
 
+    case "create_board": {
+      const { ...body } = args;
+      return ok(
+        await dueeyFetch("/boards", {
+          method: "POST",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
     case "update_board": {
       const { id, ...body } = args as { id: string; [k: string]: unknown };
       return ok(
@@ -430,6 +480,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return ok(
         await dueeyFetch(`/cards/${id}`, {
           method: "PATCH",
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    case "add_comment": {
+      const { id, ...body } = args as { id: string; [k: string]: unknown };
+      return ok(
+        await dueeyFetch(`/cards/${id}/comments`, {
+          method: "POST",
           body: JSON.stringify(body),
         })
       );
