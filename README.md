@@ -44,7 +44,7 @@ Authenticate with your Dueey token as a bearer header. In a repo's `.mcp.json`:
 
 Set `DUEEY_API_KEY` as an environment variable on your Claude Code cloud environment. Or run
 `claude mcp add --transport http dueey https://dueey.com/mcp --header "Authorization: Bearer pm_..."`.
-(claude.ai "custom connectors" require OAuth, which is not implemented yet.)
+For claude.ai: Settings → Connectors → Add custom connector → `https://dueey.com/mcp`. It signs you in via Dueey's OAuth consent page and issues a revocable API token.
 
 #### Claude Desktop
 

@@ -9,6 +9,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { apiKeyStore, createServer } from "./server.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
+const PUBLIC_URL = (process.env.PUBLIC_URL ?? "https://dueey.com").replace(/\/+$/, "");
 const PATH = process.env.MCP_PATH ?? "/mcp";
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -39,7 +40,7 @@ createHttpServer(async (req, res) => {
   const m = /^Bearer\s+(pm_\S+)$/i.exec(req.headers.authorization ?? "");
   if (!m) {
     return send(res, 401, { error: "Missing or invalid Authorization: Bearer pm_... token" }, {
-      "WWW-Authenticate": 'Bearer realm="dueey"',
+      "WWW-Authenticate": `Bearer realm="dueey", resource_metadata="${PUBLIC_URL}/.well-known/oauth-protected-resource/mcp"`,
     });
   }
 
