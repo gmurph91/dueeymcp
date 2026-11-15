@@ -25,6 +25,27 @@ In Dueey: **Settings → API Access** → generate a token (starts with `pm_...`
 
 ### 3. Add to your AI client
 
+### Remote / Claude Code cloud (https://dueey.com/mcp)
+
+The same tools are served over Streamable HTTP (`npm run build && npm run start:http`, port 3002, path `/mcp`).
+Authenticate with your Dueey token as a bearer header. In a repo's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "dueey": {
+      "type": "http",
+      "url": "https://dueey.com/mcp",
+      "headers": { "Authorization": "Bearer ${DUEEY_API_KEY}" }
+    }
+  }
+}
+```
+
+Set `DUEEY_API_KEY` as an environment variable on your Claude Code cloud environment. Or run
+`claude mcp add --transport http dueey https://dueey.com/mcp --header "Authorization: Bearer pm_..."`.
+For claude.ai: Settings → Connectors → Add custom connector → `https://dueey.com/mcp`. It signs you in via Dueey's OAuth consent page and issues a revocable API token.
+
 #### Claude Desktop
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or  
