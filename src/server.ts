@@ -48,8 +48,12 @@ async function dueeyFetch(
 
 export function createServer(): Server {
 const server = new Server(
-  { name: "dueey-mcp", version: "1.0.0" },
-  { capabilities: { tools: {} } }
+  { name: "dueey-mcp", version: "1.2.0" },
+  {
+    capabilities: { tools: {} },
+    instructions:
+      "Dueey project-management tools. If at any point what you or the user want to do is not possible with these tools (a missing tool, missing field, unsupported operation, or a tool that errors or behaves unexpectedly), do not silently work around it or give up: call `report_feedback` with a short, specific description of the gap, then tell the user what you reported.",
+  }
 );
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
@@ -61,6 +65,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "get_me",
       description: "Get the currently authenticated Dueey user (id, email, name).",
       inputSchema: { type: "object", properties: {}, required: [] },
+    },
+
+    // Workspaces
+    {
+      name: "list_workspaces",
+      description: "List the workspaces the user can access (id, name, icon). Use the id as `workspaceId` for list_boards / create_board.",
+      inputSchema: { type: "object", properties: {} },
     },
 
     // Boards
@@ -125,6 +136,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
+    {
+      name: "list_board_members",
+      description: "List people who can be assigned on a board (id, email, name). Use before assigning so you pass a valid member.",
+      inputSchema: {
+        type: "object",
+        required: ["boardId"],
+        properties: { boardId: { type: "string", description: "Board ID" } },
+      },
+    },
+
     // Lists
     {
       name: "list_lists",
@@ -186,6 +207,79 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           unassigned: { type: "boolean", description: "Only return cards with no assignee." },
           fields: { type: "string" },
         },
+      },
+    },
+    {
+      name: "search_cards",
+      description:
+        "Search cards across ALL boards (or narrow with boardId/listId). Text `q` matches title, description and card key (e.g. 'SWAT-42'); combine with filters, which are ANDed. Prefer this over list_cards + scanning when looking for something specific.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          q: { type: "string", description: "Case-insensitive text to find in title, description or card key." },
+          boardId: { type: "string" },
+          listId: { type: "string" },
+          priority: { type: "string", enum: ["critical", "high", "medium", "low", "none"] },
+          label: { type: "string" },
+          assignee: { type: "string", description: "Exact assignee name as stored on the card." },
+          overdue: { type: "boolean", description: "Only cards past their due date and not completed." },
+          dueBefore: { type: "string", description: "ISO date/time upper bound for dueDate." },
+          dueAfter: { type: "string", description: "ISO date/time lower bound for dueDate." },
+          completed: { type: "boolean", description: "true = only completed, false = only not completed." },
+          limit: { type: "number", description: "Max results (default 50, max 200)" },
+          fields: { type: "string" },
+        },
+      },
+    },
+    {
+      name: "move_card",
+      description:
+        "Move a card to another list (possibly on another board you can access) and/or reorder it within its list. Position defaults to the bottom of the target list.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          listId: { type: "string", description: "Target list. Omit to reorder within the current list." },
+          position: {
+            oneOf: [{ type: "number" }, { type: "string", enum: ["top", "bottom"] }],
+            description: "'top' or 'bottom' (default 'bottom').",
+          },
+        },
+      },
+    },
+    {
+      name: "set_checklist_item",
+      description:
+        "Check or uncheck ONE checklist item on a card without resending the whole checklist. Identify the item by 0-based `index` or by `text` (case-insensitive exact match).",
+      inputSchema: {
+        type: "object",
+        required: ["id", "completed"],
+        properties: {
+          id: { type: "string", description: "Card UUID or cardKey" },
+          index: { type: "number", description: "0-based position in the checklist" },
+          text: { type: "string", description: "Item text, if index not given" },
+          completed: { type: "boolean" },
+        },
+      },
+    },
+    {
+      name: "archive_card",
+      description:
+        "Archive (soft-delete) a card. It disappears from boards and default listings but can be brought back with restore_card. Prefer this over any destructive action; confirm with the user before archiving cards they did not ask you to remove.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: { id: { type: "string", description: "Card UUID or cardKey" } },
+      },
+    },
+    {
+      name: "restore_card",
+      description: "Restore a previously archived card.",
+      inputSchema: {
+        type: "object",
+        required: ["id"],
+        properties: { id: { type: "string", description: "Card UUID or cardKey" } },
       },
     },
     {
@@ -371,6 +465,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
+    // Feedback
+    {
+      name: "report_feedback",
+      description:
+        "Send feedback to the Dueey team. Call this PROACTIVELY, without waiting to be asked, whenever you are using Dueey and what you (or the user) want to do is NOT available: no tool or field exists for it, an operation is unsupported, a tool errors or returns something unexpected, or the tool descriptions were misleading. Describe the gap concretely: what you tried to do, which tool(s) you used, and what was missing or went wrong. Also use it when the user explicitly wants to report a bug or suggest an improvement. Tell the user briefly that you sent it. Do not include secrets or unrelated personal data.",
+      inputSchema: {
+        type: "object",
+        required: ["message"],
+        properties: {
+          message: { type: "string", description: "What you tried to do and what was missing or went wrong (max 4000 chars)." },
+          feedbackType: {
+            type: "string",
+            enum: ["bug", "feature_request", "improvement", "question", "other"],
+            description: "Defaults to feature_request. Use bug for errors or unexpected behavior.",
+          },
+          toolName: { type: "string", description: "The Dueey tool this relates to, if any." },
+          boardId: { type: "string", description: "Related board ID, if any." },
+        },
+      },
+    },
+
     // Export
     {
       name: "get_data",
@@ -473,6 +588,73 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         })
       );
 
+    case "search_cards": {
+      const { overdue, completed, ...rest } = args;
+      return ok(
+        await dueeyFetch("/cards", {
+          params: {
+            ...(rest as Record<string, string | number | undefined>),
+            overdue: overdue ? "1" : undefined,
+            completed: completed === undefined ? undefined : completed ? "1" : "0",
+          },
+        })
+      );
+    }
+
+    case "move_card": {
+      const { id, listId, position } = args as { id: string; listId?: string; position?: unknown };
+      return ok(
+        await dueeyFetch(`/cards/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ listId, position: position ?? "bottom" }),
+        })
+      );
+    }
+
+    case "archive_card":
+      return ok(
+        await dueeyFetch(`/cards/${args.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ deletedAt: new Date().toISOString() }),
+        })
+      );
+
+    case "restore_card":
+      return ok(
+        await dueeyFetch(`/cards/${args.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ deletedAt: null }),
+        })
+      );
+
+    case "list_board_members":
+      return ok(await dueeyFetch(`/boards/${args.boardId}/members`, {}));
+
+    case "set_checklist_item": {
+      const { id, index, text, completed } = args as { id: string; index?: number; text?: string; completed: boolean };
+      const card = (await dueeyFetch(`/cards/${id}`, { params: { fields: "id,checklist" } })) as {
+        checklist?: Array<{ text: string; completed: boolean }>;
+      };
+      const checklist = card.checklist ?? [];
+      const i =
+        typeof index === "number"
+          ? index
+          : checklist.findIndex((c) => c.text.trim().toLowerCase() === String(text ?? "").trim().toLowerCase());
+      if (!Number.isInteger(i) || i < 0 || i >= checklist.length) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Checklist item not found. Checklist: ${JSON.stringify(checklist.map((c, n) => `${n}: ${c.text}`))}`
+        );
+      }
+      const next = checklist.map((c, n) => (n === i ? { ...c, completed } : c));
+      return ok(
+        await dueeyFetch(`/cards/${id}`, { method: "PATCH", body: JSON.stringify({ checklist: next }) })
+      );
+    }
+
+    case "list_workspaces":
+      return ok(await dueeyFetch("/workspaces", {}));
+
     case "claim_next_card": {
       const { ...body } = args;
       return ok(
@@ -554,6 +736,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ]);
       return ok({ card, board, siblingCards });
     }
+
+    case "report_feedback":
+      return ok(
+        await dueeyFetch("/feedback", {
+          method: "POST",
+          body: JSON.stringify({ ...args, clientName: "dueey-mcp" }),
+        })
+      );
 
     case "get_data":
       return ok(

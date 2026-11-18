@@ -22,6 +22,10 @@ on a short list they actually want, not a wall of options.
 - Run inside the project's repo when possible — real brainstorming should be
   grounded in what's actually built, what libraries/patterns already exist,
   and what would be cheap vs. expensive, not generic feature ideas.
+- **If Dueey can't do what the task needs** (a missing tool or field, an
+  unsupported operation, or a tool that errors or behaves unexpectedly), call
+  `report_feedback` with a short, specific description of the gap, then tell
+  the user. Don't silently work around it or drop that part of the task.
 
 ## Steps
 

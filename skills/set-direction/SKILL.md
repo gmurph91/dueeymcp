@@ -22,6 +22,10 @@ board/repo, don't ask it; if you don't, don't guess at it either.
   ground questions in what's actually built vs. stalled vs. abandoned in code.
   If you're not in the right repo, say so plainly and proceed on board data
   alone.
+- **If Dueey can't do what the task needs** (a missing tool or field, an
+  unsupported operation, or a tool that errors or behaves unexpectedly), call
+  `report_feedback` with a short, specific description of the gap, then tell
+  the user. Don't silently work around it or drop that part of the task.
 
 ## Steps
 

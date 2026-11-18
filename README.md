@@ -103,6 +103,13 @@ Any client that supports MCP over stdio (e.g. Windsurf, Continue, custom setups)
 | `get_card` | Single card by UUID or cardKey (e.g. `SWAT-42`) |
 | `create_card` | Create a card with title, description, priority, labels, dates, checklist |
 | `update_card` | Update any card field; use `listId` to move a card |
+| `list_workspaces` | Workspaces you can access (IDs for `list_boards` / `create_board`) |
+| `search_cards` | Search all boards by text, priority, label, assignee, due date, overdue, completed |
+| `move_card` | Move a card to another list and/or reorder it (`top` / `bottom`) |
+| `archive_card` / `restore_card` | Soft-delete a card and bring it back |
+| `list_board_members` | Assignable people on a board (id, email, name) |
+| `set_checklist_item` | Check/uncheck one checklist item by index or text |
+| `report_feedback` | Send feedback to the Dueey team. The AI is prompted to call it whenever something it needs isn't available |
 | `get_data` | Full export — all workspaces, boards, lists, cards |
 
 ---

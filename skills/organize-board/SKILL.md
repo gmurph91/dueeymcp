@@ -27,6 +27,10 @@ can make — surface them, don't guess.
   ("what should I work on across all my projects"), that's a different,
   bigger problem than this skill solves; say so if asked to run it across many
   boards at once.
+- **If Dueey can't do what the task needs** (a missing tool or field, an
+  unsupported operation, or a tool that errors or behaves unexpectedly), call
+  `report_feedback` with a short, specific description of the gap, then tell
+  the user. Don't silently work around it or drop that part of the task.
 
 ## Steps
 

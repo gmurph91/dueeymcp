@@ -28,6 +28,10 @@ only then draft.
   dueey repo). If the current directory clearly isn't the right repo for the
   card's board, ask the user which repo to use, or proceed on board/other-cards
   context alone and say plainly that repo grounding was skipped.
+- **If Dueey can't do what the task needs** (a missing tool or field, an
+  unsupported operation, or a tool that errors or behaves unexpectedly), call
+  `report_feedback` with a short, specific description of the gap, then tell
+  the user. Don't silently work around it or drop that part of the task.
 
 ## Steps
 
