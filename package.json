@@ -1,6 +1,6 @@
 {
   "name": "dueey-mcp",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "description": "MCP server for the Dueey PM Assistant public API",
   "type": "module",
   "main": "dist/index.js",

@@ -48,7 +48,7 @@ async function dueeyFetch(
 
 export function createServer(): Server {
 const server = new Server(
-  { name: "dueey-mcp", version: "1.2.0" },
+  { name: "dueey-mcp", version: "1.4.0" },
   {
     capabilities: { tools: {} },
     instructions:
@@ -77,7 +77,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // Boards
     {
       name: "list_boards",
-      description: "List all boards the user has access to, optionally filtered by workspace.",
+      description: "List all boards the user has access to, optionally filtered by workspace. Each board includes `repositoryUrl` (GitHub repo) when set.",
       inputSchema: {
         type: "object",
         properties: {
@@ -88,7 +88,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "get_board",
-      description: "Get full details for a single board by its ID or slug.",
+      description: "Get full details for a single board by its ID or slug, including `repositoryUrl` (GitHub repo) when set.",
       inputSchema: {
         type: "object",
         required: ["id"],
@@ -110,6 +110,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           title: { type: "string" },
           description: { type: "string" },
           goal: { type: "string", description: "What this board/project is trying to achieve — used as AI context." },
+          repositoryUrl: { type: ["string", "null"], description: "GitHub repository for this board, https://github.com/<owner>/<repo>. Null clears it." },
           cardKeyPrefix: { type: "string", description: "2-12 uppercase alphanumeric chars, e.g. SWAT. Derived from title if omitted." },
           lists: {
             type: "array",
@@ -122,7 +123,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "update_board",
       description:
-        "Update a board's title, description, goal, or projectDescription. Structural fields (visibility, cardKeyPrefix, workspaceId) are intentionally not editable via this API.",
+        "Update a board's title, description, goal, projectDescription, or repositoryUrl. Structural fields (visibility, cardKeyPrefix, workspaceId) are intentionally not editable via this API.",
       inputSchema: {
         type: "object",
         required: ["id"],
@@ -132,6 +133,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           description: { type: "string" },
           goal: { type: "string", description: "What this board/project is trying to achieve — used as AI context." },
           projectDescription: { type: "string" },
+          repositoryUrl: { type: ["string", "null"], description: "GitHub repository for this board, https://github.com/<owner>/<repo>. Null clears it." },
         },
       },
     },
@@ -169,6 +171,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           boardId: { type: "string" },
           title: { type: "string" },
           description: { type: "string" },
+          role: {
+            type: ["string", "null"],
+            enum: ["backlog", "up_next", "needs_me", "done"],
+            description: "Semantic role of the list. 'up_next' is the queue of work to do next (often titled 'Doing'). Omit for no role.",
+          },
           position: { type: "number", description: "Defaults to the end of the board." },
         },
       },
@@ -183,6 +190,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           id: { type: "string", description: "List ID" },
           title: { type: "string" },
           description: { type: "string" },
+          role: {
+            type: ["string", "null"],
+            enum: ["backlog", "up_next", "needs_me", "done"],
+            description: "Semantic role of the list (backlog | up_next | needs_me | done). Pass null to clear.",
+          },
           position: { type: "number" },
           deletedAt: {
             type: "string",
@@ -230,6 +242,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           fields: { type: "string" },
         },
       },
+    },
+    {
+      name: "query_cards",
+      description:
+        "Cross-board card query in ONE call (use instead of looping list_cards over every board). Returns {cards, nextCursor}; each card is compact and includes boardId and listRole. Ordered by updatedAt ascending: follow nextCursor to page, or remember the last card's updatedAt and pass it as updatedSince on the next poll to get only changes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agentStatus: {
+            type: "array",
+            items: { type: "string", enum: ["idle", "queued", "dispatched", "in_progress", "needs_input", "pr_ready", "done", "failed"] },
+            description: "Only cards with one of these agent statuses.",
+          },
+          listRole: { type: "array", items: { type: "string", enum: ["backlog", "up_next", "needs_me", "done"] }, description: "Only cards in lists with one of these roles." },
+          listId: { type: "array", items: { type: "string" } },
+          boardId: { type: "array", items: { type: "string" }, description: "Restrict to these boards (default: all accessible)." },
+          labels: { type: "array", items: { type: "string" }, description: "Cards having ANY of these labels." },
+          updatedSince: { type: "string", description: "ISO timestamp; only cards updated strictly after it." },
+          cursor: { type: "string", description: "nextCursor from the previous page." },
+          limit: { type: "number", description: "Page size (default 100, max 200)." },
+          fields: { type: "string", description: "Comma-separated fields to return." },
+        },
+      },
+    },
+    {
+      name: "get_boards_summary",
+      description:
+        "Every accessible board in one call: id, slug, title, workspaceId, repositoryUrl, and its lists (id, title, role, position, cardCount; archived cards excluded).",
+      inputSchema: { type: "object", properties: { workspaceId: { type: "string" } } },
     },
     {
       name: "move_card",
@@ -436,8 +477,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           agentStatus: {
             type: "string",
             nullable: true,
-            enum: ["idle", "queued", "dispatched", "in_progress", "pr_ready", "done", "failed"],
-            description: "Self-report an agent's progress on this card.",
+            enum: ["idle", "queued", "dispatched", "in_progress", "needs_input", "pr_ready", "done", "failed"],
+            description: "Self-report an agent's progress on this card. Use needs_input when blocked on a human, and set agentQuestion.",
+          },
+          agentQuestion: {
+            type: "string",
+            nullable: true,
+            description:
+              "The exact question or options the agent needs answered (max 4000 chars). Independent of agentStatus: moving status out of needs_input does NOT clear it, so set null yourself when answered. Humans reply with add_comment.",
+          },
+          agentSessionId: {
+            type: "string",
+            nullable: true,
+            description: "Claude session id working this card (1-120 printable ASCII chars, no spaces). null clears.",
+          },
+          agentSession: {
+            type: "object",
+            required: ["sessionId", "status"],
+            description:
+              "Upsert one entry in the card's session history (matched by sessionId; history keeps the latest 20) and make it the current agentSessionId unless agentSessionId is also passed. Intended for a SessionStart/SessionEnd hook.",
+            properties: {
+              sessionId: { type: "string" },
+              status: { type: "string", enum: ["running", "needs_input", "completed", "failed", "interrupted"] },
+              startedAt: { type: "string", description: "ISO timestamp. Defaults to now for a new session." },
+              endedAt: { type: "string", description: "ISO timestamp. Defaults to now for completed/failed/interrupted." },
+              summary: { type: "string", description: "Short summary of what the session did (max 2000 chars)." },
+            },
           },
           agentTarget: {
             type: "string",
@@ -600,6 +665,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         })
       );
     }
+
+    case "query_cards": {
+      const csv = (v: unknown) => (Array.isArray(v) ? v.join(",") : (v as string | undefined));
+      return ok(
+        await dueeyFetch("/cards/query", {
+          params: {
+            agentStatus: csv(args.agentStatus),
+            listRole: csv(args.listRole),
+            listId: csv(args.listId),
+            boardId: csv(args.boardId),
+            labels: csv(args.labels),
+            updatedSince: args.updatedSince as string | undefined,
+            cursor: args.cursor as string | undefined,
+            limit: args.limit as number | undefined,
+            fields: args.fields as string | undefined,
+          },
+        })
+      );
+    }
+
+    case "get_boards_summary":
+      return ok(await dueeyFetch("/boards/summary", { params: { workspaceId: args.workspaceId as string | undefined } }));
 
     case "move_card": {
       const { id, listId, position } = args as { id: string; listId?: string; position?: unknown };

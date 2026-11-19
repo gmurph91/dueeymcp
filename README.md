@@ -96,15 +96,17 @@ Any client that supports MCP over stdio (e.g. Windsurf, Continue, custom setups)
 | Tool | Description |
 |------|-------------|
 | `get_me` | Current authenticated user |
-| `list_boards` | All boards (optional `workspaceId` filter) |
-| `get_board` | Single board by ID or slug |
-| `list_lists` | Lists/columns for a board |
+| `list_boards` | All boards (optional `workspaceId` filter); includes `repositoryUrl` when set |
+| `get_board` | Single board by ID or slug; includes `repositoryUrl` when set |
+| `list_lists` | Lists/columns for a board (includes `role`); `create_list` / `update_list` accept `role`: `backlog` \| `up_next` \| `needs_me` \| `done` |
 | `list_cards` | Cards filtered by board or list |
 | `get_card` | Single card by UUID or cardKey (e.g. `SWAT-42`) |
 | `create_card` | Create a card with title, description, priority, labels, dates, checklist |
-| `update_card` | Update any card field; use `listId` to move a card |
+| `update_card` | Update any card field; use `listId` to move a card. Agent fields: `agentStatus` (incl. `needs_input`), `agentQuestion`, `agentSessionId`, `agentSession` (upsert into the capped session history) |
 | `list_workspaces` | Workspaces you can access (IDs for `list_boards` / `create_board`) |
 | `search_cards` | Search all boards by text, priority, label, assignee, due date, overdue, completed |
+| `query_cards` | Cross-board query in one call: filter by `agentStatus`, `listRole`, `listId`, `boardId`, `labels`, `updatedSince`; cursor-paginated (`{cards, nextCursor}`); cards include `boardId` and `listRole` |
+| `get_boards_summary` | Every board with `repositoryUrl` and its lists (`id`, `title`, `role`, `cardCount`) in one call |
 | `move_card` | Move a card to another list and/or reorder it (`top` / `bottom`) |
 | `archive_card` / `restore_card` | Soft-delete a card and bring it back |
 | `list_board_members` | Assignable people on a board (id, email, name) |
