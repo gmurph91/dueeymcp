@@ -103,6 +103,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "list_labels",
+      description: "List the label names available on a board (with hex color when set). Pass these names in `labels` on create_card/update_card; unknown names are also accepted and created automatically.",
+      inputSchema: {
+        type: "object",
+        required: ["boardId"],
+        properties: { boardId: { type: "string", description: "Board ID" } },
+      },
+    },
+    {
       name: "create_board",
       description:
         "Create a brand-new board (project) in a workspace. Creates default lists (To Do / Doing / Done) unless `lists` is passed (pass `lists: []` for no lists).",
@@ -596,6 +605,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           params: { fields: args.fields as string },
         })
       );
+
+    case "list_labels":
+      return ok(await dueeyFetch(`/boards/${args.boardId}/labels`));
 
     case "create_board": {
       const { ...body } = args;

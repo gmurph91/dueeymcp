@@ -98,6 +98,7 @@ Any client that supports MCP over stdio (e.g. Windsurf, Continue, custom setups)
 | `get_me` | Current authenticated user |
 | `list_boards` | All boards (optional `workspaceId` filter); includes `repositoryUrl` when set |
 | `get_board` | Single board by ID or slug; includes `repositoryUrl` when set |
+| `list_labels` | Label names available on a board (with color); pass them in `labels` on `create_card`/`update_card` |
 | `list_lists` | Lists/columns for a board (includes `role`); `create_list` / `update_list` accept `role`: `backlog` \| `up_next` \| `needs_me` \| `done` |
 | `list_cards` | Cards filtered by board or list |
 | `get_card` | Single card by UUID or cardKey (e.g. `SWAT-42`) |
