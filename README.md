@@ -87,7 +87,7 @@ Add the server in **Cursor Settings → Features → MCP** (or your project’s 
 
 #### Other clients
 
-Any client that supports MCP over stdio (e.g. Windsurf, Continue, custom setups) can use this server: run `node /path/to/dist/index.js` with `DUEEY_API_KEY` set in the environment and point the client at that process.
+Any client that supports MCP over stdio (e.g. Windsurf, Continue, custom setups) can use this server: run `node /path/to/dist/index.js` with `DUEEY_API_KEY` set in the environment and point the client at that process. Set `DUEEY_API_URL` to target a different API base (default `https://dueey.com/api/v1`).
 
 ---
 
@@ -111,6 +111,7 @@ Any client that supports MCP over stdio (e.g. Windsurf, Continue, custom setups)
 | `archive_card` / `restore_card` | Soft-delete a card and bring it back |
 | `list_board_members` | Assignable people on a board (id, email, name) |
 | `set_checklist_item` | Check/uncheck one checklist item by index or text |
+| `get_card_context` | Card + board (title/goal) + sibling cards. Siblings are compact (`id`, `cardKey`, `title`, `priority`, `labels`, `listId`, `assignee`, `dueDate`, `agentStatus`) and capped by `siblingLimit` (default 50, `0` = none); use `get_card` for full detail |
 | `report_feedback` | Send feedback to the Dueey team. The AI is prompted to call it whenever something it needs isn't available |
 | `get_data` | Full export — all workspaces, boards, lists, cards |
 

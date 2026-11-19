@@ -7,7 +7,11 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 
-const BASE_URL = "https://dueey.com/api/v1";
+const BASE_URL = (process.env.DUEEY_API_URL ?? "https://dueey.com/api/v1").replace(/\/+$/, "");
+
+/** Light fields returned for each sibling in get_card_context (no description/checklist/comments/activity/etc). */
+const SIBLING_FIELDS = "id,cardKey,title,priority,labels,listId,assignee,dueDate,agentStatus";
+const DEFAULT_SIBLING_LIMIT = 50;
 
 /** Per-request API key (HTTP mode). Falls back to DUEEY_API_KEY (stdio mode). */
 export const apiKeyStore = new AsyncLocalStorage<string>();
@@ -525,7 +529,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["id"],
         properties: {
           id: { type: "string", description: "Card UUID or cardKey" },
-          siblingLimit: { type: "number", description: "Max sibling cards to include (default 50)" },
+          siblingLimit: { type: "number", description: "Max sibling cards to include (default 50; 0 = none). Siblings are compact (id, cardKey, title, priority, labels, listId, assignee, dueDate, agentStatus) — use get_card for full detail." },
         },
       },
     },
@@ -815,12 +819,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!boardId) {
         return ok({ card, board: null, siblingCards: [] });
       }
-      const [board, siblingCards] = await Promise.all([
+      const raw = args.siblingLimit;
+      const siblingLimit =
+        typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : DEFAULT_SIBLING_LIMIT;
+      const cardId = card.id as string | undefined;
+      const [board, siblings] = await Promise.all([
         dueeyFetch(`/boards/${boardId}`, {}),
-        dueeyFetch("/cards", {
-          params: { boardId, limit: (args.siblingLimit as number) ?? 50 },
-        }),
+        // siblingLimit 0 means "no siblings": skip the request entirely.
+        siblingLimit === 0
+          ? Promise.resolve([])
+          : dueeyFetch("/cards", {
+              // +1 so we still have siblingLimit cards after dropping the card itself.
+              params: { boardId, limit: siblingLimit + 1, fields: SIBLING_FIELDS },
+            }),
       ]);
+      const siblingCards = (siblings as Record<string, unknown>[])
+        .filter((c) => c.id !== cardId)
+        .slice(0, siblingLimit);
       return ok({ card, board, siblingCards });
     }
 
