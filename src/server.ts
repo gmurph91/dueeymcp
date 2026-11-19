@@ -52,7 +52,7 @@ async function dueeyFetch(
 
 export function createServer(): Server {
 const server = new Server(
-  { name: "dueey-mcp", version: "1.4.0" },
+  { name: "dueey-mcp", version: "1.5.0" },
   {
     capabilities: { tools: {} },
     instructions:
@@ -100,6 +100,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           id: { type: "string", description: "Board ID or slug" },
           fields: { type: "string" },
         },
+      },
+    },
+    {
+      name: "list_labels",
+      description: "List the label names available on a board (with hex color when set). Pass these names in `labels` on create_card/update_card; unknown names are also accepted and created automatically.",
+      inputSchema: {
+        type: "object",
+        required: ["boardId"],
+        properties: { boardId: { type: "string", description: "Board ID" } },
       },
     },
     {
@@ -367,7 +376,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "string",
             enum: ["critical", "high", "medium", "low", "none"],
           },
-          labels: { type: "array", items: { type: "string" } },
+          labels: { type: "array", items: { type: "string" }, description: "Label NAMES (not IDs), case-insensitive, e.g. [\"bug\", \"launch\"]. Names not yet on the board are created automatically and returned in `labelsCreated`; unusable values are reported in `labelWarnings`." },
           dueDate: { type: "string", description: "ISO date e.g. 2025-12-31" },
           startDate: { type: "string" },
           checklist: {
@@ -439,7 +448,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "string",
             enum: ["critical", "high", "medium", "low", "none"],
           },
-          labels: { type: "array", items: { type: "string" } },
+          labels: { type: "array", items: { type: "string" }, description: "Label NAMES (replaces the card's full label set) (not IDs), case-insensitive, e.g. [\"bug\", \"launch\"]. Names not yet on the board are created automatically and returned in `labelsCreated`; unusable values are reported in `labelWarnings`." },
           dueDate: { type: "string", nullable: true },
           startDate: { type: "string", nullable: true },
           checklist: { type: "array" },
@@ -596,6 +605,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           params: { fields: args.fields as string },
         })
       );
+
+    case "list_labels":
+      return ok(await dueeyFetch(`/boards/${args.boardId}/labels`));
 
     case "create_board": {
       const { ...body } = args;
