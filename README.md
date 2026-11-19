@@ -102,7 +102,7 @@ Any client that supports MCP over stdio (e.g. Windsurf, Continue, custom setups)
 | `list_lists` | Lists/columns for a board (includes `role`); `create_list` / `update_list` accept `role`: `backlog` \| `up_next` \| `needs_me` \| `done` |
 | `list_cards` | Cards filtered by board or list |
 | `get_card` | Single card by UUID or cardKey (e.g. `SWAT-42`) |
-| `create_card` | Create a card with title, description, priority, labels (by name; unknown names are auto-created on the board), dates, checklist |
+| `create_card` | Create a card with title, description, priority, labels (by name; unknown names are auto-created on the board), dates, checklist, acceptance criteria, technical notes, effort estimate, file hints, agent target |
 | `update_card` | Update any card field; use `listId` to move a card. Agent fields: `agentStatus` (incl. `needs_input`), `agentQuestion`, `agentSessionId`, `agentSession` (upsert into the capped session history) |
 | `list_workspaces` | Workspaces you can access (IDs for `list_boards` / `create_board`) |
 | `search_cards` | Search all boards by text, priority, label, assignee, due date, overdue, completed |

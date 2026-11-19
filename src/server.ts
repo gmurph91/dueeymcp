@@ -390,6 +390,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             },
           },
           members: { type: "array", items: { type: "string" }, description: "Assignee(s) — user id/email or agent id." },
+          acceptanceCriteria: {
+            type: "array",
+            items: { type: "string" },
+            description: "What 'done' means for this card, as a list of concrete statements.",
+          },
+          technicalNotes: {
+            type: "string",
+            description: "Implementation notes: files/patterns to reuse, approach, gotchas.",
+          },
+          effortEstimate: { type: "string", enum: ["XS", "S", "M", "L", "XL"] },
+          fileHints: {
+            type: "array",
+            items: { type: "string" },
+            description: "Repo paths relevant to this card, e.g. src/components/ui/chart.tsx.",
+          },
+          agentTarget: { type: "string", enum: ["claude-code", "codex", "cursor", "api"] },
         },
       },
     },
