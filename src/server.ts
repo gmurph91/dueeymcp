@@ -52,7 +52,7 @@ async function dueeyFetch(
 
 export function createServer(): Server {
 const server = new Server(
-  { name: "dueey-mcp", version: "1.4.0" },
+  { name: "dueey-mcp", version: "1.5.0" },
   {
     capabilities: { tools: {} },
     instructions:
