@@ -62,8 +62,7 @@ const server = new Server(
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
+const TOOLS = [
     // User
     {
       name: "get_me",
@@ -592,13 +591,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
-  ],
-}));
+];
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
 // ─── Tool Handlers ───────────────────────────────────────────────────────────
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
+
+  // Reject calls missing required arguments (or using a wrong name such as `cardId` instead of `id`)
+  // up front. Otherwise e.g. a missing `id` becomes the URL `/cards/undefined` and surfaces as a
+  // misleading "404 Card not found".
+  const toolDef = TOOLS.find((t) => t.name === name);
+  if (toolDef) {
+    const schema = toolDef.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
+    const missing = (schema.required ?? []).filter((key) => {
+      const v = (args as Record<string, unknown>)[key];
+      return v === undefined || v === null || v === "";
+    });
+    if (missing.length > 0) {
+      const known = Object.keys(schema.properties ?? {});
+      const unknown = Object.keys(args).filter((k) => !known.includes(k));
+      const hint = unknown.length > 0 ? ` Unrecognized argument(s) passed: ${unknown.join(", ")}.` : "";
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `${name}: missing required argument(s): ${missing.join(", ")}. Accepted arguments: ${known.join(", ")}.${hint}`
+      );
+    }
+  }
 
   const ok = (data: unknown) => ({
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
